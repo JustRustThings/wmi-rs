@@ -5,7 +5,9 @@ use serde::Serialize;
 use std::convert::TryFrom;
 use windows::core::{ComInterface, IUnknown, BSTR};
 use windows::Win32::Foundation::{VARIANT_FALSE, VARIANT_TRUE};
-use windows::Win32::System::Com::{self, VARENUM, VARIANT, VT_ARRAY, VT_TYPEMASK};
+use windows::Win32::System::Variant::{
+    self as WinVariant, VARENUM, VARIANT, VT_ARRAY, VT_TYPEMASK,
+};
 use windows::Win32::System::Wmi::{self, IWbemClassObject, CIMTYPE_ENUMERATION};
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -98,42 +100,42 @@ impl Variant {
         // Rust can infer the return type of `vt.*Val()` calls,
         // but it's easier to read when the type is named explicitly.
         let variant_value = match variant_type {
-            Com::VT_BSTR => {
+            WinVariant::VT_BSTR => {
                 let bstr_ptr: &BSTR = unsafe { &vt.Anonymous.Anonymous.Anonymous.bstrVal };
 
                 Variant::String(bstr_ptr.try_into()?)
             }
-            Com::VT_I1 => {
+            WinVariant::VT_I1 => {
                 let num = unsafe { vt.Anonymous.Anonymous.Anonymous.cVal };
 
                 Variant::I1(num as _)
             }
-            Com::VT_I2 => {
+            WinVariant::VT_I2 => {
                 let num: i16 = unsafe { vt.Anonymous.Anonymous.Anonymous.iVal };
 
                 Variant::I2(num)
             }
-            Com::VT_I4 => {
+            WinVariant::VT_I4 => {
                 let num: i32 = unsafe { vt.Anonymous.Anonymous.Anonymous.lVal };
 
                 Variant::I4(num)
             }
-            Com::VT_I8 => {
+            WinVariant::VT_I8 => {
                 let num: i64 = unsafe { vt.Anonymous.Anonymous.Anonymous.llVal };
 
                 Variant::I8(num)
             }
-            Com::VT_R4 => {
+            WinVariant::VT_R4 => {
                 let num: f32 = unsafe { vt.Anonymous.Anonymous.Anonymous.fltVal };
 
                 Variant::R4(num)
             }
-            Com::VT_R8 => {
+            WinVariant::VT_R8 => {
                 let num: f64 = unsafe { vt.Anonymous.Anonymous.Anonymous.dblVal };
 
                 Variant::R8(num)
             }
-            Com::VT_BOOL => {
+            WinVariant::VT_BOOL => {
                 let value = unsafe { vt.Anonymous.Anonymous.Anonymous.boolVal };
 
                 match value {
@@ -142,29 +144,29 @@ impl Variant {
                     _ => return Err(WMIError::ConvertBoolError(value.0)),
                 }
             }
-            Com::VT_UI1 => {
+            WinVariant::VT_UI1 => {
                 let num: u8 = unsafe { vt.Anonymous.Anonymous.Anonymous.bVal };
 
                 Variant::UI1(num)
             }
-            Com::VT_UI2 => {
+            WinVariant::VT_UI2 => {
                 let num: u16 = unsafe { vt.Anonymous.Anonymous.Anonymous.uiVal };
 
                 Variant::UI2(num)
             }
-            Com::VT_UI4 => {
+            WinVariant::VT_UI4 => {
                 let num: u32 = unsafe { vt.Anonymous.Anonymous.Anonymous.ulVal };
 
                 Variant::UI4(num)
             }
-            Com::VT_UI8 => {
+            WinVariant::VT_UI8 => {
                 let num: u64 = unsafe { vt.Anonymous.Anonymous.Anonymous.ullVal };
 
                 Variant::UI8(num)
             }
-            Com::VT_EMPTY => Variant::Empty,
-            Com::VT_NULL => Variant::Null,
-            Com::VT_UNKNOWN => {
+            WinVariant::VT_EMPTY => Variant::Empty,
+            WinVariant::VT_NULL => Variant::Null,
+            WinVariant::VT_UNKNOWN => {
                 let unk = unsafe { &vt.Anonymous.Anonymous.Anonymous.punkVal };
                 let ptr = unk.as_ref().ok_or(WMIError::NullPointerResult)?;
                 Variant::Unknown(IUnknownWrapper::new(ptr.clone()))
