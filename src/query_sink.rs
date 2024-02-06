@@ -210,6 +210,7 @@ mod tests {
     use crate::tests::fixtures::*;
     use futures::StreamExt;
     use windows::core::{ComInterface, IUnknown, Interface};
+    use windows::Win32::System::Wmi::WBEM_GENERIC_FLAG_TYPE;
 
     #[async_std::test]
     async fn async_it_should_send_result() {
@@ -326,7 +327,13 @@ mod tests {
             // As p_sink's RefCount = 1 before this call,
             // p_sink won't be dropped at the end of ExecNotificationQueryAsync
             con.svc
-                .ExecNotificationQueryAsync(&query_language, &query, 0, None, &p_sink)
+                .ExecNotificationQueryAsync(
+                    &query_language,
+                    &query,
+                    WBEM_GENERIC_FLAG_TYPE(0),
+                    None,
+                    &p_sink,
+                )
                 .unwrap()
         };
 

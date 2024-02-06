@@ -8,7 +8,7 @@ use futures::{Stream, StreamExt};
 use std::{collections::HashMap, time::Duration};
 use windows::core::BSTR;
 use windows::Win32::System::Wmi::{
-    IWbemObjectSink, WBEM_FLAG_FORWARD_ONLY, WBEM_FLAG_RETURN_IMMEDIATELY,
+    IWbemObjectSink, WBEM_FLAG_FORWARD_ONLY, WBEM_FLAG_RETURN_IMMEDIATELY, WBEM_GENERIC_FLAG_TYPE,
 };
 
 ///
@@ -29,7 +29,7 @@ impl WMIConnection {
             self.svc.ExecNotificationQuery(
                 &query_language,
                 &query,
-                (WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY).0 as _,
+                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
                 None,
             )?
         };
@@ -167,8 +167,13 @@ impl WMIConnection {
         unsafe {
             // As p_sink's RefCount = 1 before this call,
             // p_sink won't be dropped at the end of ExecNotificationQueryAsync
-            self.svc
-                .ExecNotificationQueryAsync(&query_language, &query, 0, None, &p_sink_handle)?
+            self.svc.ExecNotificationQueryAsync(
+                &query_language,
+                &query,
+                WBEM_GENERIC_FLAG_TYPE(0),
+                None,
+                &p_sink_handle,
+            )?
         };
 
         Ok(AsyncQueryResultStream::new(
