@@ -4,11 +4,10 @@ use log::debug;
 use std::marker::PhantomData;
 use windows::Win32::Foundation::{CO_E_NOTINITIALIZED, RPC_E_TOO_LATE};
 use windows::Win32::System::Com::{
-    CLSCTX_INPROC_SERVER, CoCreateInstance, CoIncrementMTAUsage, CoInitializeSecurity,
-    CoSetProxyBlanket, EOAC_NONE, RPC_C_AUTHN_LEVEL, RPC_C_AUTHN_LEVEL_CALL,
-    RPC_C_AUTHN_LEVEL_CONNECT, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_AUTHN_LEVEL_NONE,
-    RPC_C_AUTHN_LEVEL_PKT, RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
-    RPC_C_IMP_LEVEL_IMPERSONATE,
+    CLSCTX_INPROC_SERVER, CoCreateInstance, CoInitializeSecurity, CoSetProxyBlanket, EOAC_NONE,
+    RPC_C_AUTHN_LEVEL, RPC_C_AUTHN_LEVEL_CALL, RPC_C_AUTHN_LEVEL_CONNECT,
+    RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_AUTHN_LEVEL_NONE, RPC_C_AUTHN_LEVEL_PKT,
+    RPC_C_AUTHN_LEVEL_PKT_INTEGRITY, RPC_C_AUTHN_LEVEL_PKT_PRIVACY, RPC_C_IMP_LEVEL_IMPERSONATE,
 };
 use windows::Win32::System::Rpc::{RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE};
 use windows::Win32::System::Wmi::{
@@ -251,14 +250,49 @@ fn create_locator() -> windows_core::Result<IWbemLocator> {
     Ok(loc)
 }
 
+unsafe fn delay_load<T>(
+    library: windows::core::PCSTR,
+    function: windows::core::PCSTR,
+) -> Option<T> {
+    unsafe {
+        let library = windows::Win32::System::LibraryLoader::LoadLibraryExA(
+            library,
+            None,
+            windows::Win32::System::LibraryLoader::LOAD_LIBRARY_SEARCH_DEFAULT_DIRS,
+        )
+        .ok()?;
+
+        let address = windows::Win32::System::LibraryLoader::GetProcAddress(library, function);
+
+        if address.is_some() {
+            return Some(core::mem::transmute_copy(&address));
+        }
+
+        let _res = windows::Win32::Foundation::FreeLibrary(library);
+        None
+    }
+}
+
 fn create_locator_or_init() -> windows_core::Result<IWbemLocator> {
+    type CoIncrementMTAUsageDelay =
+        extern "system" fn(cookie: *mut *mut std::ffi::c_void) -> windows::core::HRESULT;
+
     let loc_res = create_locator();
     match loc_res {
         // If COM is not initialized, initialize it and try again.
         // Based on [`load_factory`](https://github.com/microsoft/windows-rs/blob/945130accc25ac18a47054115e861ca704a37eb5/crates/libs/core/src/imp/factory_cache.rs#L73)
         // from the `windows-rs` crate.
         Err(err) if err.code() == CO_E_NOTINITIALIZED => {
-            let _ = unsafe { CoIncrementMTAUsage() }?;
+            let mta = unsafe {
+                delay_load::<CoIncrementMTAUsageDelay>(
+                    windows::core::s!("ole32.dll"),
+                    windows::core::s!("CoIncrementMTAUsage"),
+                )
+            };
+            if let Some(mta) = mta {
+                let mut cookie = core::ptr::null_mut();
+                let _ = mta(&mut cookie);
+            }
             let sec_result = init_security();
 
             // If security was initialized already, there's no need to return an error.
